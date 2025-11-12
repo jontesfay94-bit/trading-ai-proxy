@@ -1,4 +1,4 @@
-// index.js - Your Final Server Code
+// index.js - The Correctly Ordered Server Code
 
 const express = require('express');
 const fetch = require('node-fetch');
@@ -9,11 +9,7 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 
-// --- NEW, IMPORTANT LINE! ---
-// This tells the server to show the index.html file from the 'public' folder
-// when someone visits the main URL.
-app.use(express.static('public'));
-
+// --- THE FIX: DEFINE SPECIFIC API ROUTES FIRST ---
 app.get('/api/klines', async (req, res) => {
     const { symbol, interval, limit } = req.query;
     try {
@@ -25,6 +21,10 @@ app.get('/api/klines', async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch data from Binance API' });
     }
 });
+
+// --- THEN, SERVE THE STATIC FRONT-END AS THE LAST STEP ---
+// This serves your index.html file for the main URL (e.g., /)
+app.use(express.static('public'));
 
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
