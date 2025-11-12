@@ -1,8 +1,6 @@
-<!-- PASTE THIS ENTIRE CODE INTO public/index.html ON GITHUB -->
 
 <!DOCTYPE html>
 <html lang="en">
-<!-- The entire HTML, HEAD, and STYLE sections are unchanged... -->
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -114,7 +112,6 @@
         </div>
     </div>
     <script id="ai-worker" type="javascript/worker">
-        // Web worker code is unchanged...
         function calculateRSI(closes, period = 14) { if (closes.length < period + 1) return 50; let gains = 0, losses = 0; for (let i = closes.length - period; i < closes.length; i++) { const change = closes[i] - closes[i - 1]; if (change > 0) gains += change; else losses -= change; } const avgGain = gains / period; const avgLoss = losses / period; if (avgLoss === 0) return 100; const rs = avgGain / avgLoss; return 100 - (100 / (1 + rs)); }
         function calculateSingleEMA(closes, period) { const multiplier = 2 / (period + 1); let ema = closes[0]; for (let i = 1; i < closes.length; i++) { ema = (closes[i] - ema) * multiplier + ema; } return ema; }
         function calculateMACD(closes) { const ema12 = calculateSingleEMA(closes, 12); const ema26 = calculateSingleEMA(closes, 26); const macdLine = ema12 - ema26; return { macdLine, histogram: macdLine }; }
@@ -146,10 +143,8 @@
                 this.socket.onclose = () => { this.isConnected = false; this.updateConnectionStatus('Connection Closed. Reconnecting...', '#f59e0b'); setTimeout(() => this.connectToBinanceWebSocket(), 5000); };
             }
             
-            // --- FINAL FIX: Pointing to your live server ---
+            // --- FINAL FIX: Using a relative URL because the HTML is served from the same domain as the API ---
             async fetchKlineData(limit = 100) {
-                // This now uses a "relative URL". Since the HTML is served from the same domain
-                // as the API, we don't need the full "https://..." part.
                 const RELATIVE_URL = `/api/klines?symbol=${this.symbol}&interval=${this.timeframe}&limit=${limit}`;
 
                 try {
@@ -229,7 +224,6 @@
                 document.getElementById('timeframeSelect').addEventListener('change', (e) => { this.timeframe = e.target.value; this.resetAnalysis(); });
                 document.querySelectorAll('.tab').forEach(tab => { tab.addEventListener('click', (e) => { document.querySelector('.tab.active').classList.remove('active'); document.querySelector('.tab-content.active').classList.remove('active'); e.currentTarget.classList.add('active'); document.getElementById(e.currentTarget.dataset.tab + 'Tab').classList.add('active'); }); });
             }
-            // All remaining helper functions are unchanged...
             updateConnectionStatus(text, color) { const el = document.getElementById('connectionStatus'); el.textContent = text; el.style.color = color; }
             updateLivePriceDisplay() { const el = document.getElementById('livePrice'); if (!this.livePrice) { el.textContent = "Waiting..."; return; } const changeClass = this.priceChange >= 0 ? 'price-up' : 'price-down'; el.innerHTML = `${this.symbol}: <span class="${changeClass}">$${this.livePrice.toFixed(2)}</span>`; }
             setStartButtonState(isAnalyzing, text) { const btn = document.getElementById('startBtn'); btn.disabled = isAnalyzing; btn.textContent = text; }
