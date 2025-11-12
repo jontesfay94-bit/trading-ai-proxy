@@ -1,19 +1,18 @@
-// index.js - Your Private Messenger for the Render.com Factory
+// index.js - Your Final Server Code
 
 const express = require('express');
 const fetch = require('node-fetch');
 const cors = require('cors');
 
 const app = express();
-// Render provides the port number via an environment variable
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 
-// Health check route for Render to know our app is alive
-app.get('/', (req, res) => {
-    res.send('AI Proxy is alive!');
-});
+// --- NEW, IMPORTANT LINE! ---
+// This tells the server to show the index.html file from the 'public' folder
+// when someone visits the main URL.
+app.use(express.static('public'));
 
 app.get('/api/klines', async (req, res) => {
     const { symbol, interval, limit } = req.query;
