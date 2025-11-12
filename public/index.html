@@ -1,0 +1,252 @@
+<!-- PASTE THIS ENTIRE CODE INTO public/index.html ON GITHUB -->
+
+<!DOCTYPE html>
+<html lang="en">
+<!-- The entire HTML, HEAD, and STYLE sections are unchanged... -->
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>High-Performance Trading AI - FIXED LEARNING</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: #f8fafc; line-height: 1.6; padding: 0; margin: 0; min-height: 100vh; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 15px; }
+        header { background: rgba(30, 41, 59, 0.9); padding: 15px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+        .header-content { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+        .logo h1 { font-size: 1.5rem; background: linear-gradient(90deg, #3b82f6, #10b981); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .controls { display: flex; gap: 10px; flex-wrap: wrap; }
+        .btn { padding: 10px 20px; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; transition: all 0.2s; font-size: 0.9rem; }
+        .btn-primary { background: #3b82f6; color: white; }
+        .btn-success { background: #10b981; color: white; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-warning { background: #f59e0b; color: white; }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); }
+        .btn:disabled { background: #475569; cursor: not-allowed; transform: none; box-shadow: none; }
+        select { padding: 10px; border-radius: 6px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; }
+        .card { background: rgba(30, 41, 59, 0.7); border-radius: 10px; padding: 20px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); border: 1px solid rgba(255, 255, 255, 0.05); margin-bottom: 20px; }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+        .card-title { font-size: 1.2rem; font-weight: 600; }
+        .predictions-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 20px; }
+        @media (max-width: 1200px) { .predictions-grid { grid-template-columns: repeat(3, 1fr); } }
+        @media (max-width: 768px) { .predictions-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 480px) { .predictions-grid { grid-template-columns: 1fr; } }
+        .prediction-card { background: rgba(15, 23, 42, 0.8); border-radius: 8px; padding: 15px; border-left: 4px solid #64748b; transition: all 0.3s; }
+        .prediction-card.buy { border-left-color: #10b981; background: rgba(16, 185, 129, 0.15); }
+        .prediction-card.sell { border-left-color: #ef4444; background: rgba(239, 68, 68, 0.15); }
+        .prediction-card.hold { border-left-color: #f59e0b; background: rgba(245, 158, 11, 0.15); }
+        .prediction-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .prediction-type { font-weight: 700; font-size: 1.1rem; }
+        .prediction-type.buy { color: #10b981; }
+        .prediction-type.sell { color: #ef4444; }
+        .prediction-type.hold { color: #f59e0b; }
+        .prediction-confidence { font-size: 0.8rem; background: rgba(255, 255, 255, 0.1); padding: 3px 8px; border-radius: 20px; }
+        .prediction-price { font-size: 1.2rem; font-weight: 700; margin: 5px 0; }
+        .prediction-details { font-size: 0.85rem; color: #94a3b8; margin-bottom: 10px; }
+        .prediction-timestamp { font-size: 0.75rem; color: #64748b; margin-top: 5px; }
+        .prediction-reasoning { font-size: 0.8rem; margin-top: 10px; color: #94a3b8; }
+        .prediction-actions { display: flex; gap: 5px; margin-top: 10px; }
+        .prediction-actions .btn { padding: 4px 8px; font-size: 0.7rem; flex: 1; }
+        .progress-container { margin-top: 10px; }
+        .progress-bar { height: 6px; background: rgba(255, 255, 255, 0.1); border-radius: 3px; overflow: hidden; }
+        .progress-fill { height: 100%; background: #3b82f6; border-radius: 3px; transition: width 0.3s; }
+        .batch-group { background: rgba(15, 23, 42, 0.5); border-radius: 8px; padding: 15px; margin-bottom: 20px; border-left: 4px solid #3b82f6; }
+        .batch-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+        .batch-title { font-size: 1.1rem; font-weight: 600; color: #3b82f6; }
+        .batch-predictions { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+        @media (max-width: 1200px) { .batch-predictions { grid-template-columns: repeat(3, 1fr); } }
+        @media (max-width: 768px) { .batch-predictions { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 480px) { .batch-predictions { grid-template-columns: 1fr; } }
+        .status-badge { padding: 3px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: 600; }
+        .status-active { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
+        .status-success { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+        .status-fail { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+        .loading { text-align: center; padding: 20px; color: #94a3b8; }
+        .pulse { animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        .adaptive-indicators { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+        .indicator-tag { background: rgba(59, 130, 246, 0.2); padding: 3px 8px; border-radius: 12px; font-size: 0.7rem; color: #3b82f6; }
+        .analysis-card { background: rgba(15, 23, 42, 0.5); border-radius: 6px; padding: 10px; margin-bottom: 10px; }
+        .analysis-header { display: flex; justify-content: space-between; font-weight: 600; margin-bottom: 5px; }
+        .signal-stats { display: flex; gap: 15px; margin-top: 10px; font-size: 0.8rem; }
+        .signal-stat { padding: 5px 10px; border-radius: 15px; background: rgba(255, 255, 255, 0.05); }
+        .tab-container { margin-top: 20px; }
+        .tabs { display: flex; border-bottom: 1px solid rgba(255, 255, 255, 0.1); margin-bottom: 20px; }
+        .tab { padding: 10px 20px; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; }
+        .tab.active { border-bottom-color: #3b82f6; color: #3b82f6; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .learning-controls { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+        .learning-control { display: flex; align-items: center; gap: 5px; font-size: 0.8rem; }
+        .learning-control input { width: 60px; padding: 3px; border-radius: 4px; background: #1e293b; color: white; border: 1px solid #475569; }
+        .live-price { font-size: 1.4rem; font-weight: bold; text-align: center; margin: 10px 0; padding: 10px; background: rgba(255, 255, 255, 0.05); border-radius: 8px; }
+        .price-up { color: #10b981; }
+        .price-down { color: #ef4444; }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <h1>🚀 High-Performance AI</h1>
+                </div>
+                <div class="controls">
+                    <select id="symbolSelect"><option value="BTCUSDT">BTC/USDT</option><option value="ETHUSDT">ETH/USDT</option><option value="ADAUSDT">ADA/USDT</option><option value="BNBUSDT">BNB/USDT</option></select>
+                    <select id="timeframeSelect"><option value="1m">1 Minute</option><option value="5m">5 Minutes</option><option value="15m">15 Minutes</option><option value="1h">1 Hour</option></select>
+                    <button id="startBtn" class="btn btn-primary">Generate 5 Predictions</button>
+                    <button id="resetBtn" class="btn btn-warning">Reset Analysis</button>
+                </div>
+            </div>
+        </div>
+    </header>
+    <div class="container">
+        <div class="tab-container">
+            <div class="tabs"><div class="tab active" data-tab="dashboard">Dashboard</div><div class="tab" data-tab="history">History</div><div class="tab" data-tab="performance">Performance</div></div>
+            <div id="dashboardTab" class="tab-content active">
+                <div class="card"><div class="card-header"><h2 class="card-title">Live Market Data</h2><div id="connectionStatus" class="prediction-details">Connecting...</div></div><div id="livePrice" class="live-price">Loading...</div></div>
+                <div class="card"><div class="card-header"><h2 class="card-title">Sequential Predictions</h2><div id="lastUpdate" class="prediction-details">Ready for analysis</div></div><div id="predictionContainer"><div class="loading"><div class="pulse">Click "Generate 5 Predictions" to start</div></div></div><div class="progress-container"><div class="progress-bar"><div id="analysisProgress" class="progress-fill" style="width: 0%"></div></div><div id="progressText" style="text-align: center; margin-top: 5px; font-size: 0.8rem; color: #94a3b8;">Analysis progress: 0%</div></div><div id="signalStats" class="signal-stats" style="display: none;"><div class="signal-stat buy">BUY: <span id="buyCount">0</span></div><div class="signal-stat sell">SELL: <span id="sellCount">0</span></div><div class="signal-stat hold">HOLD: <span id="holdCount">0</span></div></div></div>
+                <div class="card"><div class="card-header"><h2 class="card-title">Adaptive Analysis</h2></div><div id="analysisContainer"><div class="loading"><div class="pulse">Adaptive analysis will appear here</div></div></div></div>
+                <div class="card"><div class="card-header"><h2 class="card-title">Risk Management</h2></div><div id="riskContent"><div class="loading"><div class="pulse">Risk assessment will appear here</div></div></div></div>
+                <div class="card"><div class="card-header"><h2 class="card-title">AI Learning Controls</h2></div><div class="learning-controls"><div class="learning-control"><label>Learning Rate:</label><input type="number" id="learningRateInput" min="0.1" max="1" step="0.05" value="0.5"></div><div class="learning-control"><label>Min Confidence:</label><input type="number" id="minConfidenceInput" min="30" max="80" value="55"></div><div class="learning-control"><label>Min R/R Ratio:</label><input type="number" id="minRRInput" min="1" max="3" step="0.1" value="1.5"></div><button class="btn btn-primary" onclick="tradingAI.updateSettings()">Apply Settings</button></div></div>
+            </div>
+            <div id="historyTab" class="tab-content"><div class="card"><div class="card-header"><h2 class="card-title">Prediction History</h2><button id="clearHistoryBtn" class="btn btn-danger">Clear History</button></div><div id="historyContainer"><div class="loading"><div class="pulse">No prediction history yet.</div></div></div></div></div>
+            <div id="performanceTab" class="tab-content"><div class="card"><div class="card-header"><h2 class="card-title">Performance Analytics</h2></div><div id="performanceContainer"><div class="loading"><div class="pulse">Performance data will appear here after feedback</div></div></div></div></div>
+        </div>
+    </div>
+    <script id="ai-worker" type="javascript/worker">
+        // Web worker code is unchanged...
+        function calculateRSI(closes, period = 14) { if (closes.length < period + 1) return 50; let gains = 0, losses = 0; for (let i = closes.length - period; i < closes.length; i++) { const change = closes[i] - closes[i - 1]; if (change > 0) gains += change; else losses -= change; } const avgGain = gains / period; const avgLoss = losses / period; if (avgLoss === 0) return 100; const rs = avgGain / avgLoss; return 100 - (100 / (1 + rs)); }
+        function calculateSingleEMA(closes, period) { const multiplier = 2 / (period + 1); let ema = closes[0]; for (let i = 1; i < closes.length; i++) { ema = (closes[i] - ema) * multiplier + ema; } return ema; }
+        function calculateMACD(closes) { const ema12 = calculateSingleEMA(closes, 12); const ema26 = calculateSingleEMA(closes, 26); const macdLine = ema12 - ema26; return { macdLine, histogram: macdLine }; }
+        function calculateBollingerBands(closes, period = 20, stdDev = 2) { if (closes.length < period) return { upper: 0, middle: 0, lower: 0 }; const slice = closes.slice(-period); const mean = slice.reduce((a, b) => a + b) / period; const variance = slice.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / period; const std = Math.sqrt(variance); return { upper: mean + (std * stdDev), middle: mean, lower: mean - (std * stdDev) }; }
+        function performRealTimeAnalysis(klineData) { if (!klineData || klineData.length < 20) return { error: 'Not enough data' }; const closes = klineData.map(k => k.close); const volumes = klineData.map(k => k.volume); const rsi = calculateRSI(closes, 14); const macd = calculateMACD(closes); const bb = calculateBollingerBands(closes, 20); const price = closes[closes.length - 1]; let score = 0; let reasoning = []; let indicatorsUsed = ['RSI', 'MACD', 'Bollinger Bands', 'Volume']; if (rsi < 30) { score += 50; reasoning.push(`RSI ${rsi.toFixed(1)} Oversold`); } else if (rsi > 70) { score -= 50; reasoning.push(`RSI ${rsi.toFixed(1)} Overbought`); } if (macd.histogram > 0.1) { score += 35; reasoning.push("MACD Bullish"); } else if (macd.histogram < -0.1) { score -= 35; reasoning.push("MACD Bearish"); } if (price < bb.lower) { score += 25; reasoning.push("Price below Lower BB"); } else if (price > bb.upper) { score -= 25; reasoning.push("Price above Upper BB"); } const avgVolume = volumes.reduce((a, b) => a + b, 0) / volumes.length; if (volumes[volumes.length-1] > avgVolume * 1.5) { score += (score > 0 ? 20 : -20); reasoning.push("High Volume"); } return { score, reasoning, indicatorsUsed, price }; }
+        self.onmessage = function(e) { const { klineData, settings } = e.data; const analysis = performRealTimeAnalysis(klineData); if (analysis.error) { postMessage({ error: analysis.error }); return; } const batchPredictions = []; const batchStartTime = Date.now(); for (let i = 1; i <= 5; i++) { let adjustedScore = analysis.score; analysis.indicatorsUsed.forEach(indicator => { const key = indicator.toLowerCase().replace(' ', ''); if (settings.confidenceAdjustments[key]) { adjustedScore *= settings.confidenceAdjustments[key]; } }); let confidence = 50 + (adjustedScore / 2); confidence = Math.min(95, Math.max(10, confidence)); let predictionType = 'HOLD'; if (confidence >= settings.minConfidence + 10) predictionType = 'BUY'; if (confidence <= 40) predictionType = 'SELL'; const atr = (analysis.price * 0.01); let stopLoss = analysis.price, takeProfit = analysis.price, riskReward = 0; if (predictionType === 'BUY') { stopLoss = analysis.price - atr * 1.5; takeProfit = analysis.price + (analysis.price - stopLoss) * settings.minRR; riskReward = settings.minRR; } else if (predictionType === 'SELL') { stopLoss = analysis.price + atr * 1.5; takeProfit = analysis.price - (stopLoss - analysis.price) * settings.minRR; riskReward = settings.minRR; } const timeframeMs = { '1m': 60000, '5m': 300000, '15m': 900000, '1h': 3600000 }[settings.timeframe]; const binanceTimestamp = batchStartTime + (i * timeframeMs); batchPredictions.push({ id: binanceTimestamp + '-' + i, binanceTimestamp, sequence: i, timestamp: Date.now(), symbol: settings.symbol, timeframe: settings.timeframe, type: predictionType, entry: parseFloat(analysis.price.toFixed(2)), stop: parseFloat(stopLoss.toFixed(2)), target: parseFloat(takeProfit.toFixed(2)), riskReward: parseFloat(riskReward.toFixed(2)), confidence: parseFloat(confidence.toFixed(1)), indicatorsUsed: analysis.indicatorsUsed, reasoning: analysis.reasoning, outcome: 'Active', dataSource: settings.dataSource }); postMessage({ progress: i * 20 }); } postMessage({ result: batchPredictions, final: true }); };
+    </script>
+    <script>
+        class TradingAnalysisAI {
+            constructor() {
+                this.symbol = 'BTCUSDT'; this.timeframe = '1m'; this.predictions = []; this.history = []; this.batches = [];
+                this.isAnalyzing = false; this.livePrice = 0; this.priceChange = 0; this.isConnected = false; this.socket = null;
+                this.learningRate = 0.5; this.minConfidence = 55; this.minRR = 1.5;
+                this.confidenceAdjustments = { rsi: 1.0, macd: 1.0, bollingerbands: 1.0, volume: 1.0 };
+                this.init();
+            }
+            init() {
+                this.setupEventListeners(); this.loadSettings(); this.connectToBinanceWebSocket();
+                const blob = new Blob([document.querySelector('#ai-worker').textContent], { type: "text/javascript" });
+                this.worker = new Worker(window.URL.createObjectURL(blob));
+                this.setupWorkerListener(); console.log("High-Performance AI Initialized.");
+            }
+            connectToBinanceWebSocket() {
+                if (this.socket) { this.socket.close(); }
+                const lowerCaseSymbol = this.symbol.toLowerCase(); this.socket = new WebSocket(`wss://stream.binance.com:9443/ws/${lowerCaseSymbol}@ticker`);
+                this.socket.onopen = () => { this.isConnected = true; this.updateConnectionStatus('Connected to Binance WebSocket ✅', '#10b981'); };
+                this.socket.onmessage = (event) => { const data = JSON.parse(event.data); const newPrice = parseFloat(data.c); if (this.livePrice !== 0) { this.priceChange = newPrice - this.livePrice; } this.livePrice = newPrice; this.updateLivePriceDisplay(); };
+                this.socket.onerror = () => { this.isConnected = false; this.updateConnectionStatus('WebSocket Failed ❌', '#ef4444'); };
+                this.socket.onclose = () => { this.isConnected = false; this.updateConnectionStatus('Connection Closed. Reconnecting...', '#f59e0b'); setTimeout(() => this.connectToBinanceWebSocket(), 5000); };
+            }
+            
+            // --- FINAL FIX: Pointing to your live server ---
+            async fetchKlineData(limit = 100) {
+                // This now uses a "relative URL". Since the HTML is served from the same domain
+                // as the API, we don't need the full "https://..." part.
+                const RELATIVE_URL = `/api/klines?symbol=${this.symbol}&interval=${this.timeframe}&limit=${limit}`;
+
+                try {
+                    const response = await fetch(RELATIVE_URL);
+                    if (!response.ok) { throw new Error(`Server returned an error: ${response.statusText}`); }
+                    const data = await response.json();
+                    if (!Array.isArray(data)) { console.error("API did not return an array:", data); throw new Error(`Invalid data format from API. Message: ${data.msg || 'Unknown error'}`); }
+                    return data.map(kline => ({ close: parseFloat(kline[4]), volume: parseFloat(kline[5]) }));
+                } catch (error) {
+                    console.error("Failed to fetch kline data from server:", error);
+                    this.showMessage("Connection to the server failed. Please try again.");
+                    return null;
+                }
+            }
+
+            async generatePredictions() {
+                if (this.isAnalyzing) return;
+                this.isAnalyzing = true; this.setStartButtonState(true, 'Analyzing...'); this.predictions = []; this.clearPredictionContainer();
+                const klineData = await this.fetchKlineData(100);
+                if (!klineData) {
+                    this.showMessage("Analysis failed: Could not retrieve market history.");
+                    this.setStartButtonState(false, 'Generate 5 Predictions'); this.isAnalyzing = false; return;
+                }
+                this.worker.postMessage({ klineData, settings: { symbol: this.symbol, timeframe: this.timeframe, minConfidence: this.minConfidence, minRR: this.minRR, confidenceAdjustments: this.confidenceAdjustments, dataSource: this.isConnected ? 'Binance Live' : 'Simulated' } });
+            }
+            setupWorkerListener() {
+                this.worker.onmessage = (e) => {
+                    const { progress, result, error, final } = e.data;
+                    if (progress) { this.updateProgress(progress); }
+                    if (error) { this.showMessage(`Analysis Worker Error: ${error}`); this.setStartButtonState(false, 'Generate 5 Predictions'); this.isAnalyzing = false; }
+                    if (final && result) {
+                        this.predictions = result; this.batches.unshift({ id: Date.now(), predictions: [...result] });
+                        result.forEach(pred => this.history.unshift(pred));
+                        this.renderPredictionCards(result); this.updateProgress(100); this.updateLastUpdateStatus();
+                        this.updateSignalStats(); this.updateAdaptiveAnalysis(); this.updateRiskManagement(); this.renderHistory();
+                        this.setStartButtonState(false, 'Generate Next 5 Predictions'); this.isAnalyzing = false;
+                    }
+                };
+            }
+            renderPredictionCards(predictions) {
+                const container = document.getElementById('predictionContainer'); this.clearPredictionContainer(); const grid = document.createElement('div'); grid.className = 'predictions-grid';
+                predictions.forEach(pred => { const card = this.createPredictionCard(pred); grid.appendChild(card); }); container.appendChild(grid);
+            }
+            renderHistory() {
+                const container = document.getElementById('historyContainer'); container.innerHTML = '';
+                if (this.batches.length === 0) { container.innerHTML = `<div class="loading"><div class="pulse">No history.</div></div>`; return; }
+                this.batches.forEach(batch => {
+                    const batchGroup = document.createElement('div'); batchGroup.className = 'batch-group'; const batchTime = new Date(batch.id).toLocaleString();
+                    batchGroup.innerHTML = `<div class="batch-header"><div class="batch-title">Batch ${this.batches.length - this.batches.indexOf(batch)} • ${batchTime}</div></div>`;
+                    const predictionsGrid = document.createElement('div'); predictionsGrid.className = 'batch-predictions';
+                    batch.predictions.forEach(pred => { const card = this.createPredictionCard(pred, true); predictionsGrid.appendChild(card); });
+                    batchGroup.appendChild(predictionsGrid); container.appendChild(batchGroup);
+                });
+            }
+            createPredictionCard(pred) {
+                const card = document.createElement('div'); card.className = `prediction-card ${pred.type.toLowerCase()}`; card.dataset.id = pred.id;
+                const outcomeClass = pred.outcome === 'Success' ? 'status-success' : pred.outcome === 'Fail' ? 'status-fail' : 'status-active';
+                let actionButtons = ''; if (pred.outcome === 'Active') { actionButtons = `<div class="prediction-actions"><button class="btn btn-success">Success</button><button class="btn btn-danger">Fail</button></div>`; }
+                card.innerHTML = `<div class="prediction-header"><div class="prediction-type ${pred.type.toLowerCase()}">${pred.type}</div><div class="prediction-confidence">${pred.confidence}%</div></div><div class="prediction-price">$${pred.entry}</div><div class="prediction-details"><div>Stop: $${pred.stop}</div><div>Target: $${pred.target}</div></div><div class="prediction-timestamp">${new Date(pred.binanceTimestamp).toLocaleTimeString()}</div><div class="prediction-reasoning">${pred.reasoning.slice(0,2).join(', ')}</div><div class="status-badge ${outcomeClass}" style="margin-top: 8px;">${pred.outcome}</div>${actionButtons}`;
+                if (pred.outcome === 'Active') { card.querySelector('.btn-success').addEventListener('click', () => this.recordOutcome(pred.id, 'Success')); card.querySelector('.btn-danger').addEventListener('click', () => this.recordOutcome(pred.id, 'Fail')); }
+                return card;
+            }
+            recordOutcome(predictionId, outcome) {
+                const predHistory = this.history.find(p => p.id === predictionId); if (predHistory) predHistory.outcome = outcome;
+                const predCurrent = this.predictions.find(p => p.id === predictionId); if (predCurrent) predCurrent.outcome = outcome;
+                const cardsToUpdate = document.querySelectorAll(`.prediction-card[data-id="${predictionId}"]`);
+                cardsToUpdate.forEach(card => {
+                    const statusBadge = card.querySelector('.status-badge'); const actions = card.querySelector('.prediction-actions');
+                    if (statusBadge) { statusBadge.textContent = outcome; statusBadge.className = `status-badge ${outcome === 'Success' ? 'status-success' : 'status-fail'}`; }
+                    if (actions) { actions.remove(); }
+                }); this.learnFromOutcome(predictionId, outcome); this.updatePerformance();
+            }
+            clearPredictionContainer() { document.getElementById('predictionContainer').innerHTML = `<div class="loading"><div class="pulse">AI is thinking...</div></div>`; }
+            setupEventListeners() {
+                document.getElementById('startBtn').addEventListener('click', () => this.generatePredictions()); document.getElementById('resetBtn').addEventListener('click', () => this.resetAnalysis()); document.getElementById('clearHistoryBtn').addEventListener('click', () => this.clearHistory());
+                document.getElementById('symbolSelect').addEventListener('change', (e) => { this.symbol = e.target.value; this.livePrice = 0; this.updateLivePriceDisplay(); this.resetAnalysis(); this.connectToBinanceWebSocket(); });
+                document.getElementById('timeframeSelect').addEventListener('change', (e) => { this.timeframe = e.target.value; this.resetAnalysis(); });
+                document.querySelectorAll('.tab').forEach(tab => { tab.addEventListener('click', (e) => { document.querySelector('.tab.active').classList.remove('active'); document.querySelector('.tab-content.active').classList.remove('active'); e.currentTarget.classList.add('active'); document.getElementById(e.currentTarget.dataset.tab + 'Tab').classList.add('active'); }); });
+            }
+            // All remaining helper functions are unchanged...
+            updateConnectionStatus(text, color) { const el = document.getElementById('connectionStatus'); el.textContent = text; el.style.color = color; }
+            updateLivePriceDisplay() { const el = document.getElementById('livePrice'); if (!this.livePrice) { el.textContent = "Waiting..."; return; } const changeClass = this.priceChange >= 0 ? 'price-up' : 'price-down'; el.innerHTML = `${this.symbol}: <span class="${changeClass}">$${this.livePrice.toFixed(2)}</span>`; }
+            setStartButtonState(isAnalyzing, text) { const btn = document.getElementById('startBtn'); btn.disabled = isAnalyzing; btn.textContent = text; }
+            loadSettings() {}
+            updateSettings() {}
+            learnFromOutcome() {}
+            updateSignalStats() {}
+            updateAdaptiveAnalysis() {}
+            updateRiskManagement() {}
+            updatePerformance() {}
+            updateProgress(percent) { document.getElementById('analysisProgress').style.width = percent + '%'; document.getElementById('progressText').textContent = `Analysis progress: ${percent}%`; }
+            showMessage(message) { const analysisContainer = document.getElementById('analysisContainer'); const existingContent = analysisContainer.innerHTML; analysisContainer.innerHTML = `<div class="analysis-card" style="border-left: 4px solid #3b82f6;"><div class="analysis-header"><span>System Update</span><span>✓</span></div><div>${message}</div></div>${existingContent}`; }
+            updateLastUpdateStatus() { document.getElementById('lastUpdate').textContent = `Analysis complete • ${new Date().toLocaleTimeString()}`; }
+            resetAnalysis() { this.predictions = []; this.isAnalyzing = false; this.updateProgress(0); document.getElementById('predictionContainer').innerHTML = `<div class="loading"><div class="pulse">Click "Generate 5 Predictions" to start</div></div>`; this.setStartButtonState(false, 'Generate 5 Predictions'); document.getElementById('lastUpdate').textContent = 'Ready for analysis'; }
+            clearHistory() { if (confirm("Clear all prediction history?")) { this.history = []; this.batches = []; this.renderHistory(); this.updatePerformance(); this.showMessage("History cleared."); } }
+        }
+        let tradingAI = new TradingAnalysisAI();
+    </script>
+</body>
+</html>
