@@ -1,4 +1,4 @@
-// index.js - The Correctly Ordered Server Code
+// index.js - Your Final, Correct Server Code
 
 const express = require('express');
 const fetch = require('node-fetch');
@@ -9,7 +9,19 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 
-// --- THE FIX: DEFINE SPECIFIC API ROUTES FIRST ---
+// --- API ROUTES FIRST ---
+
+// New endpoint to get the official Binance server time
+app.get('/api/time', async (req, res) => {
+    try {
+        const binanceResponse = await fetch('https://api.binance.com/api/v3/time');
+        const data = await binanceResponse.json();
+        res.json(data);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch time from Binance' });
+    }
+});
+
 app.get('/api/klines', async (req, res) => {
     const { symbol, interval, limit } = req.query;
     try {
@@ -22,8 +34,7 @@ app.get('/api/klines', async (req, res) => {
     }
 });
 
-// --- THEN, SERVE THE STATIC FRONT-END AS THE LAST STEP ---
-// This serves your index.html file for the main URL (e.g., /)
+// --- THEN, SERVE THE FRONT-END ---
 app.use(express.static('public'));
 
 app.listen(PORT, () => {
