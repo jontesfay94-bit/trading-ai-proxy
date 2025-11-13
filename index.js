@@ -1,4 +1,3 @@
-// index.js - Your Final, Correct Server Code
 
 const express = require('express');
 const fetch = require('node-fetch');
@@ -11,7 +10,7 @@ app.use(cors());
 
 // --- API ROUTES FIRST ---
 
-// New endpoint to get the official Binance server time
+// NEW: Endpoint to get the official Binance server time
 app.get('/api/time', async (req, res) => {
     try {
         const binanceResponse = await fetch('https://api.binance.com/api/v3/time');
@@ -22,6 +21,7 @@ app.get('/api/time', async (req, res) => {
     }
 });
 
+// The existing, working klines endpoint
 app.get('/api/klines', async (req, res) => {
     const { symbol, interval, limit } = req.query;
     try {
