@@ -1,17 +1,23 @@
 {
-  "name": "trading-ai-proxy",
+  "name": "advanced-trading-ai",
   "version": "1.0.0",
-  "description": "Proxy server for Advanced Trading AI with Smart Money Concepts",
+  "description": "Advanced Professional Trading AI with Smart Money Concepts",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "dev": "node index.js"
   },
   "dependencies": {
     "express": "^4.18.2",
-    "cors": "^2.8.5",
-    "node-fetch": "^2.6.7"
+    "cors": "^2.8.5"
   },
-  "engines": {
-    "node": ">=14.0.0"
-  }
+  "keywords": [
+    "trading",
+    "ai",
+    "binance",
+    "smart-money",
+    "cryptocurrency"
+  ],
+  "author": "Advanced Trading AI",
+  "license": "MIT"
 }
