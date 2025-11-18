@@ -1873,4 +1873,416 @@
                             BUY: ${this.learningSystem.signalDistribution.buy || 0} | 
                             SELL: ${this.learningSystem.signalDistribution.sell || 0} | 
                             HOLD: ${this.learningSystem.signalDistribution.hold || 0}
-                        
+                                                </div>
+                    </div>
+                `;
+
+                smcContainer.innerHTML = `
+                    <div class="analysis-card">
+                        <div class="analysis-header">
+                            <span>Pattern Weights</span>
+                            <span>Adaptive</span>
+                        </div>
+                        <div style="font-size: 0.8rem;">
+                            ${Object.entries(this.learningSystem.patternWeights).map(([pattern, weight]) => 
+                                `<div>${pattern}: ${weight.toFixed(2)}</div>`
+                            ).join('')}
+                        </div>
+                    </div>
+                    <div class="analysis-card">
+                        <div class="analysis-header">
+                            <span>Context Weights</span>
+                            <span>Smart</span>
+                        </div>
+                        <div style="font-size: 0.8rem;">
+                            ${Object.entries(this.learningSystem.contextWeights).map(([context, weight]) => 
+                                `<div>${context}: ${weight.toFixed(2)}</div>`
+                            ).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            // ============ UTILITY METHODS ============
+            setupEventListeners() {
+                document.getElementById('startBtn').addEventListener('click', () => {
+                    this.generatePredictions();
+                });
+
+                document.getElementById('resetBtn').addEventListener('click', () => {
+                    this.resetAnalysis();
+                });
+
+                document.getElementById('clearHistoryBtn').addEventListener('click', () => {
+                    this.clearHistory();
+                });
+
+                document.getElementById('symbolSelect').addEventListener('change', (e) => {
+                    this.symbol = e.target.value;
+                    this.cleanup();
+                    this.resetAnalysis();
+                    this.connectToBinance();
+                });
+
+                document.getElementById('timeframeSelect').addEventListener('change', (e) => {
+                    this.timeframe = e.target.value;
+                    this.resetAnalysis();
+                });
+
+                document.querySelectorAll('.tab').forEach(tab => {
+                    tab.addEventListener('click', () => {
+                        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                        tab.classList.add('active');
+                        document.getElementById(tab.dataset.tab + 'Tab').classList.add('active');
+                    });
+                });
+
+                window.addEventListener('beforeunload', () => {
+                    this.cleanup();
+                });
+            }
+
+            calculateRSI(closes, period = 14) {
+                if (!Array.isArray(closes) || closes.length < period + 1) {
+                    return 50;
+                }
+                
+                let gains = 0;
+                let losses = 0;
+                
+                for (let i = 1; i <= period; i++) {
+                    const idx = closes.length - i;
+                    if (idx <= 0) break;
+                    
+                    const change = closes[idx] - closes[idx - 1];
+                    if (isFinite(change)) {
+                        if (change > 0) gains += change;
+                        else losses -= change;
+                    }
+                }
+                
+                if (gains === 0 && losses === 0) return 50;
+                
+                const avgGain = gains / period;
+                const avgLoss = losses / period;
+                
+                if (avgLoss === 0) return 100;
+                
+                const rs = avgGain / avgLoss;
+                const rsi = 100 - (100 / (1 + rs));
+                
+                return Math.max(0, Math.min(100, rsi));
+            }
+
+            calculateMACD(closes, fastPeriod = 12, slowPeriod = 26, signalPeriod = 9) {
+                if (!Array.isArray(closes) || closes.length < slowPeriod) {
+                    return { macdLine: 0, signalLine: 0, histogram: 0 };
+                }
+                
+                try {
+                    const ema12 = this.calculateEMA(closes, fastPeriod);
+                    const ema26 = this.calculateEMA(closes, slowPeriod);
+                    const macdLine = ema12.fast - ema26.slow;
+                    const signalLine = macdLine * 0.8;
+                    const histogram = macdLine - signalLine;
+                    return { macdLine, signalLine, histogram };
+                } catch (error) {
+                    return { macdLine: 0, signalLine: 0, histogram: 0 };
+                }
+            }
+
+            calculateEMA(closes, period = 14) {
+                if (!Array.isArray(closes) || closes.length === 0) {
+                    return { fast: 0, slow: 0 };
+                }
+                
+                const validCloses = closes.filter(c => isFinite(c));
+                if (validCloses.length === 0) {
+                    return { fast: 0, slow: 0 };
+                }
+                
+                const multiplier = 2 / (period + 1);
+                let emaFast = validCloses[0];
+                let emaSlow = validCloses[0];
+                
+                for (let i = 1; i < validCloses.length; i++) {
+                    emaFast = (validCloses[i] - emaFast) * multiplier + emaFast;
+                    emaSlow = (validCloses[i] - emaSlow) * (multiplier * 0.5) + emaSlow;
+                }
+                
+                return { fast: emaFast, slow: emaSlow };
+            }
+
+            generateSimulatedKlineData(limit) {
+                const data = [];
+                let price = this.livePrice || 45000;
+                const now = Date.now();
+                
+                for (let i = 0; i < limit; i++) {
+                    const change = (Math.random() - 0.5) * 200;
+                    price = Math.max(100, price + change);
+                    const high = price + Math.random() * 100;
+                    const low = price - Math.random() * 100;
+                    
+                    data.push({
+                        time: now - (limit - i) * 60000,
+                        open: price - change,
+                        high: high,
+                        low: low,
+                        close: price,
+                        volume: 800 + Math.random() * 800,
+                        closeTime: now - (limit - i - 1) * 60000,
+                        quoteVolume: 40000 + Math.random() * 20000
+                    });
+                }
+                return data;
+            }
+
+            startLiveUpdates() {
+                this.cleanup();
+                
+                this.priceUpdateInterval = setInterval(async () => {
+                    try {
+                        await this.fetchLivePrice();
+                    } catch (error) {
+                        console.log("Live update failed:", error);
+                    }
+                }, 3000);
+            }
+
+            startSimulatedUpdates() {
+                this.cleanup();
+                
+                this.priceUpdateInterval = setInterval(() => {
+                    const change = (Math.random() - 0.5) * 100;
+                    this.livePrice = Math.max(100, this.livePrice + change);
+                    this.priceChange = change;
+                    this.updateLivePriceDisplay();
+                }, 3000);
+            }
+
+            cleanup() {
+                if (this.priceUpdateInterval) {
+                    clearInterval(this.priceUpdateInterval);
+                    this.priceUpdateInterval = null;
+                }
+            }
+
+            updateLivePriceDisplay() {
+                const priceElement = document.getElementById('livePrice');
+                const changeClass = this.priceChange >= 0 ? 'price-up' : 'price-down';
+                const changeSymbol = this.priceChange >= 0 ? '↗' : '↘';
+                priceElement.innerHTML = `
+                    ${this.symbol}: <span class="${changeClass}">$${this.livePrice.toFixed(2)}</span>
+                    <span class="${changeClass}" style="font-size: 0.9rem; margin-left: 10px;">
+                        ${changeSymbol} ${Math.abs(this.priceChange).toFixed(2)}
+                    </span>
+                `;
+            }
+
+            updateProgress(percent) {
+                document.getElementById('analysisProgress').style.width = percent + '%';
+                document.getElementById('progressText').textContent = `SMC Analysis progress: ${percent}%`;
+            }
+
+            recordOutcome(predictionId, outcome) {
+                [this.predictions, this.history].forEach(collection => {
+                    const pred = collection.find(p => p.id === predictionId);
+                    if (pred) pred.outcome = outcome;
+                });
+                
+                this.batches.forEach(batch => {
+                    batch.predictions.forEach(p => {
+                        if (p.id === predictionId) p.outcome = outcome;
+                    });
+                });
+                
+                this.adaptiveLearnFromOutcome(predictionId, outcome);
+                this.updateHistory();
+                this.updatePerformance();
+                this.updatePredictionDisplay();
+            }
+
+            showMessage(message) {
+                const analysisContainer = document.getElementById('analysisContainer');
+                analysisContainer.innerHTML = `
+                    <div class="analysis-card" style="border-left: 4px solid #3b82f6">
+                        <div class="analysis-header">
+                            <span>System Update</span>
+                            <span>✓</span>
+                        </div>
+                        <div>${message}</div>
+                    </div>
+                `;
+            }
+
+            resetAnalysis() {
+                this.predictions = [];
+                this.currentBatch = 0;
+                this.lastResetTime = Date.now();
+                this.marketAnalysisCache.lastAnalysis = null;
+                this.learningSystem.recentSignals = [];
+                this.updatePredictionDisplay();
+                this.updateProgress(0);
+                document.getElementById('signalStats').style.display = 'none';
+                document.getElementById('startBtn').textContent = 'Generate Smart Predictions';
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('lastUpdate').textContent = 'SMC Analysis reset - ready for new predictions';
+                this.showMessage("SMC Analysis reset - Advanced learning preserved");
+            }
+
+            clearHistory() {
+                if (confirm("Clear all prediction history?")) {
+                    this.history = [];
+                    this.batches = [];
+                    this.updateHistory();
+                    this.updatePerformance();
+                    this.showMessage("History cleared - SMC learning weights preserved");
+                }
+            }
+
+            getTimeframeMs(timeframe) {
+                const minute = 60 * 1000;
+                switch(timeframe) {
+                    case '1m': return minute;
+                    case '5m': return 5 * minute;
+                    case '15m': return 15 * minute;
+                    case '1h': return 60 * minute;
+                    case '4h': return 240 * minute;
+                    default: return minute;
+                }
+            }
+
+            delay(ms) {
+                return new Promise(resolve => setTimeout(resolve, ms));
+            }
+
+            updateRiskManagement() {
+                const container = document.getElementById('riskContent');
+                if (this.predictions.length === 0) return;
+                
+                const lastPred = this.predictions[this.predictions.length - 1];
+                if (lastPred.type === 'HOLD') {
+                    container.innerHTML = `<p>No active trade - Market context unclear</p>`;
+                    return;
+                }
+                
+                const positionSize = Math.min(3, (1 + (lastPred.confidence - 50) / 50) * 1.5).toFixed(1);
+                container.innerHTML = `
+                    <div style="margin-bottom: 10px;"><strong>Position Size:</strong> ${positionSize}% of portfolio</div>
+                    <div style="font-size: 0.8rem; color: #94a3b8; margin-bottom: 10px;">Based on ${lastPred.confidence}% SMC confidence</div>
+                    <div style="margin-bottom: 10px;"><strong>Stop Loss:</strong> $${lastPred.stop}</div>
+                    <div style="margin-bottom: 10px;"><strong>Take Profit:</strong> $${lastPred.target}</div>
+                    <div style="margin-bottom: 10px;"><strong>Risk/Reward:</strong> 1:${lastPred.riskReward}</div>
+                `;
+            }
+
+            updateSignalStats() {
+                if (this.predictions.length === 0) return;
+                
+                const buyCount = this.predictions.filter(p => p.type === 'BUY').length;
+                const sellCount = this.predictions.filter(p => p.type === 'SELL').length;
+                const holdCount = this.predictions.filter(p => p.type === 'HOLD').length;
+                
+                document.getElementById('buyCount').textContent = buyCount;
+                document.getElementById('sellCount').textContent = sellCount;
+                document.getElementById('holdCount').textContent = holdCount;
+                document.getElementById('signalStats').style.display = 'flex';
+            }
+
+            updateHistory() {
+                const container = document.getElementById('historyContainer');
+                if (this.batches.length === 0) {
+                    container.innerHTML = `<div class="loading"><div class="pulse">No prediction history yet</div></div>`;
+                    return;
+                }
+                
+                container.innerHTML = this.batches.map((batch, batchIndex) => {
+                    const batchTime = new Date(batch.timestamp).toLocaleString();
+                    return `
+                        <div class="batch-group">
+                            <div class="batch-header">
+                                <div class="batch-title">Batch ${batchIndex + 1} • ${batchTime}</div>
+                                <div class="batch-stats">${batch.predictions.length} predictions</div>
+                            </div>
+                            <div class="batch-predictions">
+                                ${batch.predictions.map(pred => {
+                                    const displayType = pred.correctedType || pred.type;
+                                    const outcomeClass = pred.outcome === 'Success' ? 'status-success' :
+                                        pred.outcome === 'Fail' ? 'status-fail' : 
+                                        pred.outcome === 'Corrected' ? 'status-corrected' : 'status-active';
+                                    return `
+                                        <div class="prediction-card ${displayType.toLowerCase()}">
+                                            <div class="prediction-header">
+                                                <div class="prediction-type ${displayType.toLowerCase()}">${displayType}</div>
+                                                <div class="prediction-confidence">${pred.confidence}%</div>
+                                            </div>
+                                            <div class="prediction-price">$${pred.entry}</div>
+                                            <div class="prediction-details">
+                                                <div>Stop: $${pred.stop}</div>
+                                                <div>Target: $${pred.target}</div>
+                                            </div>
+                                            <div class="prediction-timestamp">
+                                                ${new Date(pred.binanceTimestamp).toLocaleTimeString()}
+                                                <br><small>${pred.dataSource}</small>
+                                            </div>
+                                            <div class="prediction-reasoning">
+                                                ${pred.reasoning[0]}
+                                            </div>
+                                            <div class="status-badge ${outcomeClass}" style="margin-top: 8px;">
+                                                ${pred.outcome}
+                                                ${pred.correctedType ? `→ ${pred.correctedType}` : ''}
+                                            </div>
+                                            ${pred.outcome === 'Active' ? `
+                                                <div class="prediction-actions">
+                                                    <button class="btn btn-success" onclick="tradingAI.recordOutcome('${pred.id}', 'Success')">✓</button>
+                                                    <button class="btn btn-danger" onclick="tradingAI.showCorrectionDialog('${pred.id}')">✗</button>
+                                                </div>
+                                            ` : ''}
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            updatePerformance() {
+                const container = document.getElementById('performanceContainer');
+                const ratedPredictions = this.history.filter(p => p.outcome !== 'Active');
+                const totalRated = ratedPredictions.length;
+                const successCount = ratedPredictions.filter(p => p.outcome === 'Success').length;
+                const correctedCount = ratedPredictions.filter(p => p.outcome === 'Corrected').length;
+                
+                if (totalRated === 0) {
+                    container.innerHTML = `<div class="loading"><div class="pulse">Rate predictions to see performance analytics</div></div>`;
+                    return;
+                }
+                
+                const successRate = ((successCount / (totalRated - correctedCount)) * 100).toFixed(1);
+                
+                container.innerHTML = `
+                    <div class="analysis-card">
+                        <div class="analysis-header"><span>SMC Success Rate</span><span>${successRate}%</span></div>
+                        <div>Based on ${totalRated} rated predictions (${correctedCount} corrected)</div>
+                    </div>
+                    <div class="analysis-card">
+                        <div class="analysis-header"><span>Performance</span><span>${successCount}W / ${totalRated - successCount - correctedCount}L</span></div>
+                        <div>Advanced pattern learning active</div>
+                    </div>
+                    <div class="analysis-card">
+                        <div class="analysis-header"><span>Learning Progress</span></div>
+                        <div>Corrections made: ${this.learningSystem.correctionHistory.length}</div>
+                        <div>Pattern adjustments: Active</div>
+                    </div>
+                `;
+            }
+        }
+
+        // Initialize the ADVANCED trading AI
+        let tradingAI = new AdvancedTradingAI();
+    </script>
+</body>
+</html>
