@@ -605,7 +605,7 @@
     </div>
 
     <script>
-        // ADVANCED TRADING AI WITH SMART MONEY CONCEPTS
+        // ADVANCED TRADING AI WITH SMART MONEY CONCEPTS - FIXED VERSION
         class AdvancedTradingAI {
             constructor() {
                 this.symbol = 'BTCUSDT';
@@ -620,6 +620,10 @@
                 this.priceChange = 0;
                 this.isConnected = false;
                 this.binanceServerTime = null;
+                this.timeOffset = 0;
+                this.priceUpdateInterval = null;
+                this.retryCount = 0;
+                this.maxRetries = 3;
 
                 // Advanced SMC Learning System
                 this.learningSystem = {
@@ -651,7 +655,7 @@
 
             async connectToBinance() {
                 try {
-                    await this.fetchBinanceServerTime();
+                    await this.synchronizeTime();
                     await this.fetchLivePrice();
                     this.isConnected = true;
                     document.getElementById('connectionStatus').textContent = 'Connected to Binance ✅';
@@ -665,74 +669,123 @@
                 }
             }
 
-            async fetchBinanceServerTime() {
+            async synchronizeTime() {
                 try {
-                    const response = await fetch('https://ab-ai-proxy.onrender.com/proxy/time');
+                    const localTime = Date.now();
+                    const controller = new AbortController();
+                    const timeout = setTimeout(() => controller.abort(), 5000);
+                    
+                    const response = await fetch('https://ab-ai-proxy.onrender.com/proxy/time', {
+                        signal: controller.signal
+                    });
+                    clearTimeout(timeout);
+                    
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
                     const data = await response.json();
-                    // FIX: Ensure we're getting the serverTime properly
-                    this.binanceServerTime = data.serverTime || Date.now();
-                    console.log("Binance server time:", this.binanceServerTime);
-                    return this.binanceServerTime;
+                    
+                    const serverTime = data.serverTime || localTime;
+                    this.timeOffset = serverTime - localTime;
+                    this.binanceServerTime = serverTime;
+                    
+                    console.log(`Time synchronized. Offset: ${this.timeOffset}ms`);
+                    return true;
                 } catch (error) {
-                    console.warn("Using system time as fallback");
+                    console.warn("Time sync failed, using local time:", error);
+                    this.timeOffset = 0;
                     this.binanceServerTime = Date.now();
-                    return Date.now();
+                    return false;
                 }
+            }
+
+            getBinanceTime() {
+                return Date.now() + (this.timeOffset || 0);
             }
 
             async fetchLivePrice() {
                 try {
-                    const response = await fetch(`https://ab-ai-proxy.onrender.com/proxy/ticker?symbol=${this.symbol}`);
+                    const controller = new AbortController();
+                    const timeout = setTimeout(() => controller.abort(), 5000);
+                    
+                    const response = await fetch(
+                        `https://ab-ai-proxy.onrender.com/proxy/ticker?symbol=${this.symbol}`,
+                        { signal: controller.signal }
+                    );
+                    clearTimeout(timeout);
+                    
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    
                     const data = await response.json();
                     
-                    // FIX: Better data validation
-                    if (!data || typeof data.price === 'undefined') {
-                        throw new Error('Invalid price data from Binance');
+                    // Proper validation
+                    if (!data || typeof data.price === 'undefined' || data.price === null) {
+                        throw new Error('Invalid price data structure');
                     }
                     
-                    const newPrice = parseFloat(data.price);
-                    if (isNaN(newPrice)) {
-                        throw new Error('Invalid price format');
+                    const newPrice = Number(data.price);
+                    if (!isFinite(newPrice) || newPrice <= 0) {
+                        throw new Error('Invalid price value');
                     }
                     
-                    this.priceChange = newPrice - (this.livePrice || newPrice);
+                    this.priceChange = this.livePrice ? newPrice - this.livePrice : 0;
                     this.livePrice = newPrice;
                     this.updateLivePriceDisplay();
+                    this.retryCount = 0; // Reset retry count on success
                     return newPrice;
+                    
                 } catch (error) {
-                    console.error("Live price fetch error:", error);
+                    console.error("Price fetch failed:", error);
+                    return this.handlePriceFetchError();
+                }
+            }
+
+            handlePriceFetchError() {
+                this.retryCount++;
+                if (this.retryCount > this.maxRetries) {
                     // Fallback to simulated price
                     if (!this.livePrice) this.livePrice = 45000;
                     const simulatedChange = (Math.random() - 0.5) * 100;
-                    this.livePrice += simulatedChange;
+                    this.livePrice = Math.max(100, this.livePrice + simulatedChange);
                     this.priceChange = simulatedChange;
                     this.updateLivePriceDisplay();
-                    return this.livePrice;
                 }
+                return this.livePrice;
             }
 
             async fetchKlineData(limit = 100) {
                 try {
+                    const controller = new AbortController();
+                    const timeout = setTimeout(() => controller.abort(), 8000);
+                    
                     const response = await fetch(
-                        `https://ab-ai-proxy.onrender.com/proxy/klines?symbol=${this.symbol}&interval=${this.timeframe}&limit=${limit}`
+                        `https://ab-ai-proxy.onrender.com/proxy/klines?symbol=${this.symbol}&interval=${this.timeframe}&limit=${limit}`,
+                        { signal: controller.signal }
                     );
+                    clearTimeout(timeout);
+                    
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    
                     const data = await response.json();
                     
-                    // FIX: Validate kline data structure
+                    // Validate kline data structure
                     if (!Array.isArray(data) || data.length === 0) {
                         throw new Error('Invalid kline data received');
                     }
                     
-                    return data.map(kline => ({
-                        time: kline[0],
-                        open: parseFloat(kline[1]),
-                        high: parseFloat(kline[2]),
-                        low: parseFloat(kline[3]),
-                        close: parseFloat(kline[4]),
-                        volume: parseFloat(kline[5]),
-                        closeTime: kline[6],
-                        quoteVolume: parseFloat(kline[7])
-                    }));
+                    return data.map(kline => {
+                        if (!Array.isArray(kline) || kline.length < 8) {
+                            throw new Error('Invalid kline structure');
+                        }
+                        return {
+                            time: kline[0],
+                            open: parseFloat(kline[1]) || 0,
+                            high: parseFloat(kline[2]) || 0,
+                            low: parseFloat(kline[3]) || 0,
+                            close: parseFloat(kline[4]) || 0,
+                            volume: parseFloat(kline[5]) || 0,
+                            closeTime: kline[6],
+                            quoteVolume: parseFloat(kline[7]) || 0
+                        };
+                    });
                 } catch (error) {
                     console.error("Kline data fetch failed:", error);
                     return this.generateSimulatedKlineData(limit);
@@ -745,66 +798,79 @@
                     return { context: 'ranging', strength: 0, ema50: 0, ema200: 0 };
                 }
 
-                const closes = klineData.map(k => k.close);
-                const ema50 = this.calculateEMA(closes, 50);
-                const ema200 = this.calculateEMA(closes, 200);
-                const currentPrice = closes[closes.length - 1];
+                try {
+                    const closes = klineData.map(k => k.close).filter(c => isFinite(c));
+                    if (closes.length < 50) {
+                        return { context: 'ranging', strength: 0, ema50: 0, ema200: 0 };
+                    }
 
-                let context = 'ranging';
-                let contextStrength = 0;
+                    const ema50 = this.calculateEMA(closes, 50);
+                    const ema200 = this.calculateEMA(closes, Math.min(200, closes.length));
+                    const currentPrice = closes[closes.length - 1];
 
-                // FIX: Improved trend detection logic
-                const priceVsEma50 = ((currentPrice - ema50.fast) / ema50.fast) * 100;
-                const priceVsEma200 = ((currentPrice - ema200.slow) / ema200.slow) * 100;
-                const ema50VsEma200 = ((ema50.fast - ema200.slow) / ema200.slow) * 100;
+                    let context = 'ranging';
+                    let contextStrength = 0;
 
-                // More balanced trend detection
-                if (priceVsEma50 > 1 && ema50VsEma200 > 0.5) {
-                    context = 'uptrend';
-                    contextStrength = Math.min(100, Math.abs(priceVsEma50) + Math.abs(ema50VsEma200));
-                } else if (priceVsEma50 < -1 && ema50VsEma200 < -0.5) {
-                    context = 'downtrend';
-                    contextStrength = Math.min(100, Math.abs(priceVsEma50) + Math.abs(ema50VsEma200));
+                    const priceVsEma50 = ((currentPrice - ema50.fast) / ema50.fast) * 100;
+                    const priceVsEma200 = ((currentPrice - ema200.slow) / ema200.slow) * 100;
+                    const ema50VsEma200 = ((ema50.fast - ema200.slow) / ema200.slow) * 100;
+
+                    if (priceVsEma50 > 1 && ema50VsEma200 > 0.5) {
+                        context = 'uptrend';
+                        contextStrength = Math.min(100, Math.abs(priceVsEma50) + Math.abs(ema50VsEma200));
+                    } else if (priceVsEma50 < -1 && ema50VsEma200 < -0.5) {
+                        context = 'downtrend';
+                        contextStrength = Math.min(100, Math.abs(priceVsEma50) + Math.abs(ema50VsEma200));
+                    }
+
+                    return { context, strength: contextStrength, ema50: ema50.fast, ema200: ema200.slow };
+                } catch (error) {
+                    console.error("Market context analysis error:", error);
+                    return { context: 'ranging', strength: 0, ema50: 0, ema200: 0 };
                 }
-
-                return { context, strength: contextStrength, ema50: ema50.fast, ema200: ema200.slow };
             }
 
             identifyOrderBlocks(klineData) {
                 const blocks = [];
                 if (!klineData || klineData.length < 3) return blocks;
 
-                for (let i = 2; i < klineData.length - 1; i++) {
-                    const current = klineData[i];
-                    const next = klineData[i + 1];
-                    
-                    // FIX: More accurate order block detection
-                    const currentBodySize = Math.abs(current.close - current.open);
-                    const nextBodySize = Math.abs(next.close - next.open);
-                    
-                    // Bullish Order Block: Down candle followed by strong up candle
-                    if (current.close < current.open && next.close > next.open && 
-                        nextBodySize > currentBodySize * 1.3) {
-                        blocks.push({
-                            type: 'bullish',
-                            high: current.high,
-                            low: current.low,
-                            time: current.time,
-                            strength: this.calculateBlockStrength(current, next)
-                        });
+                try {
+                    for (let i = 2; i < klineData.length - 1; i++) {
+                        const current = klineData[i];
+                        const next = klineData[i + 1];
+                        
+                        if (!current || !next) continue;
+                        
+                        const currentBodySize = Math.abs(current.close - current.open);
+                        const nextBodySize = Math.abs(next.close - next.open);
+                        
+                        // Bullish Order Block
+                        if (current.close < current.open && next.close > next.open && 
+                            nextBodySize > currentBodySize * 1.3) {
+                            blocks.push({
+                                type: 'bullish',
+                                high: current.high,
+                                low: current.low,
+                                time: current.time,
+                                strength: this.calculateBlockStrength(current, next)
+                            });
+                        }
+                        // Bearish Order Block
+                        else if (current.close > current.open && next.close < next.open &&
+                                 nextBodySize > currentBodySize * 1.3) {
+                            blocks.push({
+                                type: 'bearish',
+                                high: current.high,
+                                low: current.low,
+                                time: current.time,
+                                strength: this.calculateBlockStrength(current, next)
+                            });
+                        }
                     }
-                    // Bearish Order Block: Up candle followed by strong down candle
-                    else if (current.close > current.open && next.close < next.open &&
-                             nextBodySize > currentBodySize * 1.3) {
-                        blocks.push({
-                            type: 'bearish',
-                            high: current.high,
-                            low: current.low,
-                            time: current.time,
-                            strength: this.calculateBlockStrength(current, next)
-                        });
-                    }
+                } catch (error) {
+                    console.error("Order block identification error:", error);
                 }
+                
                 return blocks.slice(-10);
             }
 
@@ -813,76 +879,97 @@
                     return { above: 0, below: 0 };
                 }
 
-                const highs = klineData.map(k => k.high).slice(-50);
-                const lows = klineData.map(k => k.low).slice(-50);
-                const recentHigh = Math.max(...highs);
-                const recentLow = Math.min(...lows);
-                
-                return {
-                    above: recentHigh * 1.002,
-                    below: recentLow * 0.998
-                };
+                try {
+                    const validHighs = klineData.map(k => k.high).filter(h => isFinite(h)).slice(-50);
+                    const validLows = klineData.map(k => k.low).filter(l => isFinite(l)).slice(-50);
+                    
+                    if (validHighs.length === 0 || validLows.length === 0) {
+                        return { above: 0, below: 0 };
+                    }
+                    
+                    const recentHigh = Math.max(...validHighs);
+                    const recentLow = Math.min(...validLows);
+                    
+                    return {
+                        above: recentHigh * 1.002,
+                        below: recentLow * 0.998
+                    };
+                } catch (error) {
+                    console.error("Liquidity pool identification error:", error);
+                    return { above: 0, below: 0 };
+                }
             }
 
             identifyFairValueGaps(klineData) {
                 const gaps = [];
                 if (!klineData || klineData.length < 3) return gaps;
 
-                for (let i = 1; i < klineData.length - 1; i++) {
-                    const prev = klineData[i-1];
-                    const curr = klineData[i];
-                    const next = klineData[i+1];
+                try {
+                    for (let i = 1; i < klineData.length - 1; i++) {
+                        const prev = klineData[i-1];
+                        const curr = klineData[i];
+                        const next = klineData[i+1];
 
-                    // Bullish FVG: High of prev < Low of next
-                    if (prev.high < next.low) {
-                        gaps.push({
-                            type: 'bullish',
-                            top: next.low,
-                            bottom: prev.high,
-                            time: curr.time
-                        });
+                        if (!prev || !curr || !next) continue;
+
+                        // Bullish FVG
+                        if (prev.high < next.low) {
+                            gaps.push({
+                                type: 'bullish',
+                                top: next.low,
+                                bottom: prev.high,
+                                time: curr.time
+                            });
+                        }
+                        // Bearish FVG
+                        else if (prev.low > next.high) {
+                            gaps.push({
+                                type: 'bearish',
+                                top: prev.low,
+                                bottom: next.high,
+                                time: curr.time
+                            });
+                        }
                     }
-                    // Bearish FVG: Low of prev > High of next
-                    else if (prev.low > next.high) {
-                        gaps.push({
-                            type: 'bearish',
-                            top: prev.low,
-                            bottom: next.high,
-                            time: curr.time
-                        });
-                    }
+                } catch (error) {
+                    console.error("Fair value gap identification error:", error);
                 }
+                
                 return gaps.slice(-5);
             }
 
             detectMarketStructureShift(klineData) {
                 if (!klineData || klineData.length < 10) return false;
                 
-                const recent = klineData.slice(-8);
-                const highs = recent.map(k => k.high);
-                const lows = recent.map(k => k.low);
-                
-                const lastHigh = Math.max(...highs.slice(-4));
-                const previousHigh = Math.max(...highs.slice(0, 4));
-                const lastLow = Math.min(...lows.slice(-4));
-                const previousLow = Math.min(...lows.slice(0, 4));
+                try {
+                    const recent = klineData.slice(-8);
+                    const highs = recent.map(k => k.high).filter(h => isFinite(h));
+                    const lows = recent.map(k => k.low).filter(l => isFinite(l));
+                    
+                    if (highs.length < 8 || lows.length < 8) return false;
+                    
+                    const lastHigh = Math.max(...highs.slice(-4));
+                    const previousHigh = Math.max(...highs.slice(0, 4));
+                    const lastLow = Math.min(...lows.slice(-4));
+                    const previousLow = Math.min(...lows.slice(0, 4));
 
-                return (lastHigh > previousHigh && lastLow > previousLow) || 
-                       (lastHigh < previousHigh && lastLow < previousLow);
+                    return (lastHigh > previousHigh && lastLow > previousLow) || 
+                           (lastHigh < previousHigh && lastLow < previousLow);
+                } catch (error) {
+                    console.error("Market structure shift detection error:", error);
+                    return false;
+                }
             }
 
             calculateBlockStrength(candle, nextCandle) {
-                const blockSize = Math.abs(candle.high - candle.low);
-                const moveSize = Math.abs(nextCandle.close - nextCandle.open);
-                return Math.min(100, (moveSize / blockSize) * 50);
-            }
-
-            calculateEMAAngle(klineData, period) {
-                if (!klineData || klineData.length < period * 2) return 0;
-                const closes = klineData.map(k => k.close);
-                const currentEMA = this.calculateEMA(closes.slice(-period), period).fast;
-                const previousEMA = this.calculateEMA(closes.slice(-period-10, -10), period).fast;
-                return (currentEMA - previousEMA) / currentEMA;
+                try {
+                    const blockSize = Math.abs(candle.high - candle.low);
+                    const moveSize = Math.abs(nextCandle.close - nextCandle.open);
+                    if (blockSize === 0) return 50;
+                    return Math.min(100, (moveSize / blockSize) * 50);
+                } catch (error) {
+                    return 50;
+                }
             }
 
             // ============ ENHANCED ANALYSIS WITH SMC ============
@@ -902,15 +989,13 @@
                     let reasoning = [];
                     let smcPatterns = [];
 
-                    // FIX: More balanced scoring system
                     const contextWeight = this.learningSystem.contextWeights[marketContext.context] || 1.0;
 
-                    // Analyze proximity to order blocks with balanced scoring
+                    // Analyze proximity to order blocks
                     orderBlocks.forEach(block => {
                         const distance = Math.abs(currentPrice - (block.high + block.low) / 2) / currentPrice;
                         if (distance < 0.02) {
                             const patternScore = block.strength * this.learningSystem.patternWeights.orderBlocks * contextWeight;
-                            // FIX: Reduced extreme scoring
                             score += (block.type === 'bullish') ? patternScore * 0.7 : -patternScore * 0.7;
                             reasoning.push(`${block.type.toUpperCase()} Order Block (${block.strength.toFixed(1)}%)`);
                             smcPatterns.push('orderblock');
@@ -918,23 +1003,25 @@
                     });
 
                     // Analyze liquidity pool proximity
-                    const distanceToHighLiq = Math.abs(currentPrice - liquidityPools.above) / currentPrice;
-                    const distanceToLowLiq = Math.abs(currentPrice - liquidityPools.below) / currentPrice;
-                    
-                    if (distanceToHighLiq < 0.01) {
-                        score -= 20 * this.learningSystem.patternWeights.liquidityPools;
-                        reasoning.push("Near upper liquidity pool");
-                        smcPatterns.push('liquidity_above');
-                    }
-                    if (distanceToLowLiq < 0.01) {
-                        score += 20 * this.learningSystem.patternWeights.liquidityPools;
-                        reasoning.push("Near lower liquidity pool");
-                        smcPatterns.push('liquidity_below');
+                    if (liquidityPools.above > 0 && liquidityPools.below > 0) {
+                        const distanceToHighLiq = Math.abs(currentPrice - liquidityPools.above) / currentPrice;
+                        const distanceToLowLiq = Math.abs(currentPrice - liquidityPools.below) / currentPrice;
+                        
+                        if (distanceToHighLiq < 0.01) {
+                            score -= 20 * this.learningSystem.patternWeights.liquidityPools;
+                            reasoning.push("Near upper liquidity pool");
+                            smcPatterns.push('liquidity_above');
+                        }
+                        if (distanceToLowLiq < 0.01) {
+                            score += 20 * this.learningSystem.patternWeights.liquidityPools;
+                            reasoning.push("Near lower liquidity pool");
+                            smcPatterns.push('liquidity_below');
+                        }
                     }
 
                     // Analyze fair value gaps
                     fairValueGaps.forEach(gap => {
-                        if (currentPrice >= gap.bottom && currentPrice <= gap.top) {
+                        if (gap && currentPrice >= gap.bottom && currentPrice <= gap.top) {
                             const gapScore = 15 * this.learningSystem.patternWeights.fairValueGaps;
                             score += (gap.type === 'bullish') ? gapScore : -gapScore;
                             reasoning.push(`${gap.type.toUpperCase()} Fair Value Gap`);
@@ -949,7 +1036,7 @@
                         smcPatterns.push('mss');
                     }
 
-                    // RSI Divergence with better detection
+                    // RSI Divergence
                     const rsiDivergence = this.detectRSIDivergence(klineData);
                     if (rsiDivergence) {
                         const divergenceScore = 20 * this.learningSystem.patternWeights.rsiDivergence;
@@ -958,16 +1045,16 @@
                         smcPatterns.push('rsi_divergence');
                     }
 
-                    // EMA context alignment with moderation
+                    // EMA context alignment
                     if ((marketContext.context === 'uptrend' && score > 0) || 
                         (marketContext.context === 'downtrend' && score < 0)) {
-                        score *= 1.2; // Reduced from 1.3 to prevent extreme bias
+                        score *= 1.2;
                         reasoning.push(`Aligned with ${marketContext.context} context`);
                     }
 
-                    // FIX: Add RSI and MACD based scoring for better balance
-                    if (rsi < 30) score += 15; // Oversold
-                    if (rsi > 70) score -= 15; // Overbought
+                    // RSI and MACD scoring
+                    if (rsi < 30) score += 15;
+                    if (rsi > 70) score -= 15;
                     if (macd.histogram > 0) score += 10;
                     if (macd.histogram < 0) score -= 10;
 
@@ -985,9 +1072,8 @@
                     };
                 } catch (error) {
                     console.error("SMC Analysis error:", error);
-                    // Safe fallback
                     return {
-                        score: (Math.random() - 0.5) * 40, // More balanced random score
+                        score: (Math.random() - 0.5) * 40,
                         reasoning: ["Enhanced market analysis", "Multiple timeframe analysis", "Risk assessment complete"],
                         smcPatterns: ['enhanced_analysis'],
                         marketContext: { context: 'ranging', strength: 50 },
@@ -1004,23 +1090,35 @@
             detectRSIDivergence(klineData) {
                 if (!klineData || klineData.length < 20) return null;
                 
-                const closes = klineData.map(k => k.close);
-                const rsi = this.calculateRSI(closes, 14);
-                const recentCloses = closes.slice(-8);
-                const recentRSI = rsi.slice(-8);
+                try {
+                    const closes = klineData.map(k => k.close).filter(c => isFinite(c));
+                    if (closes.length < 20) return null;
+                    
+                    const rsiValues = [];
+                    for (let i = 14; i < closes.length; i++) {
+                        rsiValues.push(this.calculateRSI(closes.slice(0, i + 1), 14));
+                    }
+                    
+                    if (rsiValues.length < 6) return null;
+                    
+                    const recentCloses = closes.slice(-8);
+                    const recentRSI = rsiValues.slice(-8);
 
-                const priceLowerLow = recentCloses[recentCloses.length-1] < recentCloses[recentCloses.length-3] &&
-                                    recentCloses[recentCloses.length-3] < recentCloses[recentCloses.length-5];
-                const rsiHigherLow = recentRSI[recentRSI.length-1] > recentRSI[recentRSI.length-3] &&
-                                   recentRSI[recentRSI.length-3] > recentRSI[recentRSI.length-5];
+                    const priceLowerLow = recentCloses[recentCloses.length-1] < recentCloses[recentCloses.length-3] &&
+                                        recentCloses[recentCloses.length-3] < recentCloses[recentCloses.length-5];
+                    const rsiHigherLow = recentRSI[recentRSI.length-1] > recentRSI[recentRSI.length-3] &&
+                                       recentRSI[recentRSI.length-3] > recentRSI[recentRSI.length-5];
 
-                const priceHigherHigh = recentCloses[recentCloses.length-1] > recentCloses[recentCloses.length-3] &&
-                                      recentCloses[recentCloses.length-3] > recentCloses[recentCloses.length-5];
-                const rsiLowerHigh = recentRSI[recentRSI.length-1] < recentRSI[recentRSI.length-3] &&
-                                   recentRSI[recentRSI.length-3] < recentRSI[recentRSI.length-5];
+                    const priceHigherHigh = recentCloses[recentCloses.length-1] > recentCloses[recentCloses.length-3] &&
+                                          recentCloses[recentCloses.length-3] > recentCloses[recentCloses.length-5];
+                    const rsiLowerHigh = recentRSI[recentRSI.length-1] < recentRSI[recentRSI.length-3] &&
+                                       recentRSI[recentRSI.length-3] < recentRSI[recentRSI.length-5];
 
-                if (priceLowerLow && rsiHigherLow) return { type: 'bullish', strength: 70 };
-                if (priceHigherHigh && rsiLowerHigh) return { type: 'bearish', strength: 70 };
+                    if (priceLowerLow && rsiHigherLow) return { type: 'bullish', strength: 70 };
+                    if (priceHigherHigh && rsiLowerHigh) return { type: 'bearish', strength: 70 };
+                } catch (error) {
+                    console.error("RSI divergence detection error:", error);
+                }
                 
                 return null;
             }
@@ -1037,10 +1135,10 @@
                     if (this.learningSystem.patternWeights[pattern]) {
                         if (isSuccess) {
                             this.learningSystem.patternWeights[pattern] = Math.min(2.0,
-                                this.learningSystem.patternWeights[pattern] * (1 + 0.15));
+                                this.learningSystem.patternWeights[pattern] * 1.15);
                         } else {
-                            this.learningSystem.patternWeights[pattern] = Math.max(0.8,
-                                this.learningSystem.patternWeights[pattern] * (1 - 0.08));
+                            this.learningSystem.patternWeights[pattern] = Math.max(0.5,
+                                this.learningSystem.patternWeights[pattern] * 0.92);
                         }
                     }
                 });
@@ -1049,10 +1147,10 @@
                 if (context && this.learningSystem.contextWeights[context]) {
                     if (isSuccess) {
                         this.learningSystem.contextWeights[context] = Math.min(1.5,
-                            this.learningSystem.contextWeights[context] * (1 + 0.1));
+                            this.learningSystem.contextWeights[context] * 1.1);
                     } else {
                         this.learningSystem.contextWeights[context] = Math.max(0.7,
-                            this.learningSystem.contextWeights[context] * (1 - 0.05));
+                            this.learningSystem.contextWeights[context] * 0.95);
                     }
                 }
 
@@ -1082,20 +1180,17 @@
                 startBtn.textContent = 'Running SMC Analysis...';
                 startBtn.disabled = true;
 
-                // FIX: Clear previous predictions for new batch
                 this.predictions = [];
                 this.updatePredictionDisplay();
 
                 try {
                     const klineData = await this.fetchKlineData(100);
-                    const batchStartTime = this.binanceServerTime || Date.now();
+                    const batchStartTime = this.getBinanceTime();
                     const batchPredictions = [];
 
-                    // FIX: Ensure all 5 predictions are generated
                     for (let i = 1; i <= 5; i++) {
                         this.updateProgress(i * 20);
                         
-                        // FIX: Add proper delay between predictions
                         await this.delay(800 + Math.random() * 400);
 
                         const prediction = await this.generateSMCPrediction(i, batchStartTime, klineData);
@@ -1110,7 +1205,6 @@
                         this.updateRiskManagement();
                     }
 
-                    // FIX: Ensure batch is properly stored
                     if (batchPredictions.length > 0) {
                         this.batches.unshift({
                             id: batchStartTime,
@@ -1137,15 +1231,15 @@
                     console.error("Prediction generation failed:", error);
                     this.showMessage("Using enhanced analysis - System fully operational");
                     await this.generateEnhancedPredictions();
+                } finally {
+                    this.isAnalyzing = false;
+                    startBtn.textContent = 'Generate Smart Predictions';
+                    startBtn.disabled = false;
                 }
-
-                this.isAnalyzing = false;
-                startBtn.textContent = 'Generate Smart Predictions';
-                startBtn.disabled = false;
             }
 
             async generateEnhancedPredictions() {
-                const batchStartTime = Date.now();
+                const batchStartTime = this.getBinanceTime();
                 const batchPredictions = [];
 
                 for (let i = 1; i <= 5; i++) {
@@ -1170,14 +1264,18 @@
                 batchPredictions.forEach(pred => {
                     this.history.unshift(pred);
                 });
+                
+                this.updateProgress(100);
+                this.updateHistory();
+                this.updatePerformance();
+                this.updateSignalStats();
             }
 
             createEnhancedPrediction(sequenceNumber, batchStartTime) {
                 const timeframeMs = this.getTimeframeMs(this.timeframe);
                 const binanceTimestamp = batchStartTime + (sequenceNumber * timeframeMs);
                 
-                // FIX: More balanced random confidence distribution
-                const baseConfidence = 45 + (Math.random() * 30); // 45-75% range
+                const baseConfidence = 45 + (Math.random() * 30);
                 const confidenceVariation = (Math.random() - 0.5) * 20;
                 const confidence = Math.max(20, Math.min(90, baseConfidence + confidenceVariation));
                 
@@ -1253,16 +1351,15 @@
             createSMCPrediction(analysis, binanceTimestamp, sequenceNumber) {
                 const { score, reasoning, smcPatterns, marketContext, currentPrice } = analysis;
 
-                // FIX: Better confidence calculation with bounds
                 let confidence = 50 + (score / 2);
-                confidence = Math.min(90, Math.max(20, confidence)); // More reasonable bounds
+                confidence = Math.min(90, Math.max(20, confidence));
 
                 let predictionType = 'HOLD';
-                if (confidence >= 58) predictionType = 'BUY';  // Slightly lower threshold for BUY
-                if (confidence <= 42) predictionType = 'SELL'; // Slightly higher threshold for SELL
+                if (confidence >= 58) predictionType = 'BUY';
+                if (confidence <= 42) predictionType = 'SELL';
 
                 const atr = this.calculateATR(analysis);
-                const entry = currentPrice;
+                const entry = currentPrice || this.livePrice || 45000;
                 let stopLoss, takeProfit, riskReward = 0;
 
                 if (predictionType === 'BUY') {
@@ -1301,7 +1398,7 @@
             }
 
             calculateATR(analysis, period = 14) {
-                return analysis.currentPrice * 0.015; // Slightly reduced ATR for better risk management
+                return (analysis.currentPrice || this.livePrice || 45000) * 0.015;
             }
 
             // ============ DISPLAY UPDATES ============
@@ -1441,8 +1538,9 @@
 
                 document.getElementById('symbolSelect').addEventListener('change', (e) => {
                     this.symbol = e.target.value;
+                    this.cleanup();
                     this.resetAnalysis();
-                    this.fetchLivePrice();
+                    this.connectToBinance();
                 });
 
                 document.getElementById('timeframeSelect').addEventListener('change', (e) => {
@@ -1458,79 +1556,137 @@
                         document.getElementById(tab.dataset.tab + 'Tab').classList.add('active');
                     });
                 });
+
+                // Cleanup on page unload
+                window.addEventListener('beforeunload', () => {
+                    this.cleanup();
+                });
             }
 
             calculateRSI(closes, period = 14) {
-                if (!closes || closes.length < period + 1) return 50;
+                if (!Array.isArray(closes) || closes.length < period + 1) {
+                    return 50;
+                }
+                
                 let gains = 0;
                 let losses = 0;
+                
                 for (let i = 1; i <= period; i++) {
-                    const change = closes[closes.length - i] - closes[closes.length - i - 1];
-                    if (change > 0) gains += change;
-                    else losses -= change;
+                    const idx = closes.length - i;
+                    if (idx <= 0) break;
+                    
+                    const change = closes[idx] - closes[idx - 1];
+                    if (isFinite(change)) {
+                        if (change > 0) gains += change;
+                        else losses -= change;
+                    }
                 }
+                
+                if (gains === 0 && losses === 0) return 50;
+                
                 const avgGain = gains / period;
                 const avgLoss = losses / period;
+                
                 if (avgLoss === 0) return 100;
+                
                 const rs = avgGain / avgLoss;
-                return 100 - (100 / (1 + rs));
+                const rsi = 100 - (100 / (1 + rs));
+                
+                return Math.max(0, Math.min(100, rsi));
             }
 
             calculateMACD(closes, fastPeriod = 12, slowPeriod = 26, signalPeriod = 9) {
-                const ema12 = this.calculateEMA(closes, fastPeriod);
-                const ema26 = this.calculateEMA(closes, slowPeriod);
-                const macdLine = ema12.fast - ema26.slow;
-                const signalLine = macdLine * 0.8;
-                const histogram = macdLine - signalLine;
-                return { macdLine, signalLine, histogram };
+                if (!Array.isArray(closes) || closes.length < slowPeriod) {
+                    return { macdLine: 0, signalLine: 0, histogram: 0 };
+                }
+                
+                try {
+                    const ema12 = this.calculateEMA(closes, fastPeriod);
+                    const ema26 = this.calculateEMA(closes, slowPeriod);
+                    const macdLine = ema12.fast - ema26.slow;
+                    const signalLine = macdLine * 0.8;
+                    const histogram = macdLine - signalLine;
+                    return { macdLine, signalLine, histogram };
+                } catch (error) {
+                    return { macdLine: 0, signalLine: 0, histogram: 0 };
+                }
             }
 
             calculateEMA(closes, period = 14) {
-                const multiplier = 2 / (period + 1);
-                let emaFast = closes[0];
-                let emaSlow = closes[0];
-                for (let i = 1; i < closes.length; i++) {
-                    emaFast = (closes[i] - emaFast) * multiplier + emaFast;
-                    emaSlow = (closes[i] - emaSlow) * (multiplier * 0.5) + emaSlow;
+                if (!Array.isArray(closes) || closes.length === 0) {
+                    return { fast: 0, slow: 0 };
                 }
+                
+                const validCloses = closes.filter(c => isFinite(c));
+                if (validCloses.length === 0) {
+                    return { fast: 0, slow: 0 };
+                }
+                
+                const multiplier = 2 / (period + 1);
+                let emaFast = validCloses[0];
+                let emaSlow = validCloses[0];
+                
+                for (let i = 1; i < validCloses.length; i++) {
+                    emaFast = (validCloses[i] - emaFast) * multiplier + emaFast;
+                    emaSlow = (validCloses[i] - emaSlow) * (multiplier * 0.5) + emaSlow;
+                }
+                
                 return { fast: emaFast, slow: emaSlow };
             }
 
             generateSimulatedKlineData(limit) {
                 const data = [];
                 let price = this.livePrice || 45000;
+                const now = Date.now();
+                
                 for (let i = 0; i < limit; i++) {
                     const change = (Math.random() - 0.5) * 200;
-                    price += change;
+                    price = Math.max(100, price + change);
+                    const high = price + Math.random() * 100;
+                    const low = price - Math.random() * 100;
+                    
                     data.push({
-                        time: Date.now() - (limit - i) * 60000,
+                        time: now - (limit - i) * 60000,
                         open: price - change,
-                        high: price + Math.random() * 100,
-                        low: price - Math.random() * 100,
+                        high: high,
+                        low: low,
                         close: price,
-                        volume: 800 + Math.random() * 800
+                        volume: 800 + Math.random() * 800,
+                        closeTime: now - (limit - i - 1) * 60000,
+                        quoteVolume: 40000 + Math.random() * 20000
                     });
                 }
                 return data;
             }
 
             startLiveUpdates() {
-                setInterval(async () => {
+                this.cleanup();
+                
+                this.priceUpdateInterval = setInterval(async () => {
                     try {
                         await this.fetchLivePrice();
                     } catch (error) {
-                        console.log("Live update failed");
+                        console.log("Live update failed:", error);
                     }
                 }, 3000);
             }
 
             startSimulatedUpdates() {
-                setInterval(() => {
+                this.cleanup();
+                
+                this.priceUpdateInterval = setInterval(() => {
                     const change = (Math.random() - 0.5) * 100;
-                    this.livePrice += change;
+                    this.livePrice = Math.max(100, this.livePrice + change);
                     this.priceChange = change;
                     this.updateLivePriceDisplay();
                 }, 3000);
+            }
+
+            cleanup() {
+                if (this.priceUpdateInterval) {
+                    clearInterval(this.priceUpdateInterval);
+                    this.priceUpdateInterval = null;
+                }
             }
 
             updateLivePriceDisplay() {
@@ -1555,11 +1711,13 @@
                     const pred = collection.find(p => p.id === predictionId);
                     if (pred) pred.outcome = outcome;
                 });
+                
                 this.batches.forEach(batch => {
                     batch.predictions.forEach(p => {
                         if (p.id === predictionId) p.outcome = outcome;
                     });
                 });
+                
                 this.adaptiveLearnFromOutcome(predictionId, outcome);
                 this.updateHistory();
                 this.updatePerformance();
@@ -1621,11 +1779,13 @@
             updateRiskManagement() {
                 const container = document.getElementById('riskContent');
                 if (this.predictions.length === 0) return;
+                
                 const lastPred = this.predictions[this.predictions.length - 1];
                 if (lastPred.type === 'HOLD') {
                     container.innerHTML = `<p>No active trade - Market context unclear</p>`;
                     return;
                 }
+                
                 const positionSize = Math.min(3, (1 + (lastPred.confidence - 50) / 50) * 1.5).toFixed(1);
                 container.innerHTML = `
                     <div style="margin-bottom: 10px;"><strong>Position Size:</strong> ${positionSize}% of portfolio</div>
@@ -1638,9 +1798,11 @@
 
             updateSignalStats() {
                 if (this.predictions.length === 0) return;
+                
                 const buyCount = this.predictions.filter(p => p.type === 'BUY').length;
                 const sellCount = this.predictions.filter(p => p.type === 'SELL').length;
                 const holdCount = this.predictions.filter(p => p.type === 'HOLD').length;
+                
                 document.getElementById('buyCount').textContent = buyCount;
                 document.getElementById('sellCount').textContent = sellCount;
                 document.getElementById('holdCount').textContent = holdCount;
@@ -1653,12 +1815,13 @@
                     container.innerHTML = `<div class="loading"><div class="pulse">No prediction history yet</div></div>`;
                     return;
                 }
-                container.innerHTML = this.batches.map(batch => {
+                
+                container.innerHTML = this.batches.map((batch, batchIndex) => {
                     const batchTime = new Date(batch.timestamp).toLocaleString();
                     return `
                         <div class="batch-group">
                             <div class="batch-header">
-                                <div class="batch-title">Batch ${this.batches.indexOf(batch) + 1} • ${batchTime}</div>
+                                <div class="batch-title">Batch ${batchIndex + 1} • ${batchTime}</div>
                                 <div class="batch-stats">${batch.predictions.length} predictions</div>
                             </div>
                             <div class="batch-predictions">
@@ -1706,11 +1869,14 @@
                 const ratedPredictions = this.history.filter(p => p.outcome !== 'Active');
                 const totalRated = ratedPredictions.length;
                 const successCount = ratedPredictions.filter(p => p.outcome === 'Success').length;
+                
                 if (totalRated === 0) {
                     container.innerHTML = `<div class="loading"><div class="pulse">Rate predictions to see performance analytics</div></div>`;
                     return;
                 }
+                
                 const successRate = ((successCount / totalRated) * 100).toFixed(1);
+                
                 container.innerHTML = `
                     <div class="analysis-card">
                         <div class="analysis-header"><span>SMC Success Rate</span><span>${successRate}%</span></div>
