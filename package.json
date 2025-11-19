@@ -1,23 +1,18 @@
 {
-  "name": "advanced-trading-ai",
+  "name": "smc-proxy-server",
   "version": "1.0.0",
-  "description": "Advanced Professional Trading AI with Smart Money Concepts",
+  "description": "Proxy for Binance data used by SMC trading app",
   "main": "index.js",
+  "type": "commonjs",
   "scripts": {
     "start": "node index.js"
   },
-  "dependencies": {
-    "express": "^4.18.2",
-    "cors": "^2.8.5",
-    "path": "^0.12.7"
+  "engines": {
+    "node": ">=14"
   },
-  "keywords": [
-    "trading",
-    "ai",
-    "binance",
-    "smart-money",
-    "cryptocurrency"
-  ],
-  "author": "Advanced Trading AI",
-  "license": "MIT"
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "node-fetch": "^2.6.9"
+  }
 }
